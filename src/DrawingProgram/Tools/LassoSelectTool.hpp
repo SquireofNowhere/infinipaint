@@ -22,6 +22,8 @@
 #include <Helpers/SCollision.hpp>
 #include "../../CoordSpaceHelper.hpp"
 #include "DrawingProgramToolBase.hpp"
+#include <include/core/SkPath.h>
+#include <functional>
 
 class DrawingProgram;
 
@@ -41,7 +43,13 @@ class LassoSelectTool : public DrawingProgramToolBase {
         virtual void input_key_callback(const InputManager::KeyCallbackArgs& key) override;
         virtual void input_mouse_button_on_canvas_callback(const InputManager::MouseButtonCallbackArgs& button) override;
         virtual void input_mouse_motion_callback(const InputManager::MouseMotionCallbackArgs& motion) override;
+        virtual void cancel_finger_touch_callback(const FingerInput::TouchCallbackArgs& touch) override;
     private:
+        bool is_fill_mode();
+        void fill_mode_gui(const std::function<void(Vector4f*)>& colorButton);
+        SkPath get_lasso_path(SkPathFillType fillType);
+        void place_lasso_fill();
+
         struct LassoSelectControls {
             bool isSelecting = false;
             CoordSpaceHelper coords;

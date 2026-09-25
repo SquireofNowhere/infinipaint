@@ -61,6 +61,8 @@
 	- Hold <kbd>LMB</kbd> and drag the mouse to select objects within an area
 	- Once <kbd>LMB</kbd> is released, the objects will be selected
 	- The tool is otherwise identical to the Rectangle Select Tool
+	- Switch the tool to "Fill" mode in the menu on the right to fill the area you draw around instead of selecting it. The fill uses the "Fill Color" shown in that menu, which is the same as the main/top color on the left toolbar
+	- In "Fill" mode, the shape you draw is filled when you release <kbd>LMB</kbd>. Loops that cross over themselves are filled completely
 - Edit/Cursor Tool
 	- You can click on any object except a brush stroke to select it when this tool is selected
     - Double click on any object to start editing it. The object's relavant properties will be displayed on the right
