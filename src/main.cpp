@@ -765,11 +765,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
                 mS.m->input.backend_drop_text_event(event->drop);
                 break;
             case SDL_EVENT_PEN_PROXIMITY_IN: {
-                mS.m->input.pen.inProximity = true;
+                mS.m->input.backend_pen_proximity_in_update(event->pproximity);
                 break;
             }
             case SDL_EVENT_PEN_PROXIMITY_OUT: {
-                mS.m->input.pen.inProximity = false;
+                mS.m->input.backend_pen_proximity_out_update(event->pproximity);
                 break;
             }
             case SDL_EVENT_PEN_MOTION: {
@@ -798,9 +798,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
             }
             case SDL_EVENT_FINGER_DOWN:
             case SDL_EVENT_FINGER_UP:
-            case SDL_EVENT_FINGER_MOTION: {
-                if(!mS.m->conf.tabletOptions.disableTouchWhenPenInProximity || !mS.m->input.pen.inProximity)
-                    mS.m->input.backend_touch_finger_update(event->tfinger);
+            case SDL_EVENT_FINGER_MOTION:
+            case SDL_EVENT_FINGER_CANCELED: { // Sent on Android when the OS takes a touch away, such as palm rejection while using a stylus
+                mS.m->input.backend_touch_finger_update(event->tfinger);
                 break;
             }
             case SDL_EVENT_DISPLAY_ORIENTATION:

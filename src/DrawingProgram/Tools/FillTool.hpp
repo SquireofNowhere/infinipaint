@@ -1,4 +1,4 @@
-/*  
+/*
  * InfiniPaint
  * Copyright (C) 2025-2026 Yousef Khadadeh
  *
@@ -17,42 +17,34 @@
  */
 
 #pragma once
-#include <include/core/SkCanvas.h>
-#include "../../DrawData.hpp"
-#include <Helpers/SCollision.hpp>
-#include "../../CoordSpaceHelper.hpp"
 #include "DrawingProgramToolBase.hpp"
 #include <include/core/SkPath.h>
-#include <functional>
 
 class DrawingProgram;
 
-class LassoSelectTool : public DrawingProgramToolBase {
+class FillTool : public DrawingProgramToolBase {
     public:
-        LassoSelectTool(DrawingProgram& initDrawP);
+        FillTool(DrawingProgram& initDrawP);
         virtual DrawingProgramToolType get_type() override;
         virtual void gui_toolbox(Toolbar& t) override;
         virtual void gui_phone_toolbox(PhoneDrawingProgramScreen& t) override;
         virtual void right_click_popup_gui(Toolbar& t, Vector2f popupPos) override;
-        virtual void erase_component(CanvasComponentContainer::ObjInfo* erasedComp) override;
         virtual void tool_update() override;
+        virtual void erase_component(CanvasComponentContainer::ObjInfo* erasedComp) override;
         virtual void draw(SkCanvas* canvas, const DrawData& drawData) override;
-        virtual void switch_tool(DrawingProgramToolType newTool) override;
         virtual bool prevent_undo_or_redo() override;
-        virtual Vector4f* color_picker_color(Vector4f* oldColor) override;
-        virtual void input_key_callback(const InputManager::KeyCallbackArgs& key) override;
+        virtual void switch_tool(DrawingProgramToolType newTool) override;
         virtual void input_mouse_button_on_canvas_callback(const InputManager::MouseButtonCallbackArgs& button) override;
-        virtual void input_mouse_motion_callback(const InputManager::MouseMotionCallbackArgs& motion) override;
-        virtual void cancel_finger_touch_callback(const FingerInput::TouchCallbackArgs& touch) override;
-    private:
-        bool is_fill_mode();
-        void fill_mode_gui(const std::function<void(Vector4f*)>& colorButton);
-        SkPath get_lasso_path(SkPathFillType fillType);
-        void place_lasso_fill();
 
-        struct LassoSelectControls {
-            bool isSelecting = false;
-            CoordSpaceHelper coords;
-            std::vector<Vector2f> lassoPoints;
-        } controls;
+        enum class FillResult {
+            SUCCESS,
+            NOT_ENCLOSED,
+            EMPTY
+        };
+
+        // Flood fills an RGBA (premultiplied, tightly packed) image starting at seedPos, and outputs the filled area as a path in pixel coordinates
+        // tolerance is in the range [0, 1]. gapClosePixels closes gaps up to around (2 * gapClosePixels) wide. expandPixels grows the final fill area
+        static FillResult flood_fill_to_path(SkPath& outPath, const uint8_t* rgbaData, int width, int height, const Vector2i& seedPos, float tolerance, int gapClosePixels, int expandPixels);
+    private:
+        void fill_at(const Vector2f& screenPos);
 };

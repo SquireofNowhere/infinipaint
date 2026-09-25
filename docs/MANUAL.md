@@ -40,6 +40,12 @@
 	- Hold <kbd>LMB</kbd> and drag the mouse to place a rectangle
 	- Hold <kbd>Shift</kbd> while creating the rectangle to create a square
 	- You can change the properties of the rectangle between "Fill Only", "Outline Only", and "Fill and Outline". Outlines will use the main/top color on the left toolbar, which is the same as the one used for the brush tool. Fills will use the secondary/bottom color on the left toolbar
+- Fill Tool
+	- Click inside an enclosed area on the canvas to fill it with the main/top color on the left toolbar
+	- The area is found from what's currently visible on screen, so the whole area must be visible and closed off. If it reaches the edge of the screen, zoom out or close the shape first
+	- "Tolerance" controls how different a color can be from the clicked color and still be filled
+	- "Close Gaps" lets the fill stop at outlines that have small gaps in them. Higher values close bigger gaps
+	- "Expand" grows the fill by a few pixels so it tucks under the edges of the outline it stops at
 - Rectangle Select Tool
 	- Hold <kbd>LMB</kbd> and drag the mouse to select objects within a rectangle.
 	- Once <kbd>LMB</kbd> is released, the objects will be selected
@@ -55,6 +61,8 @@
 	- Hold <kbd>LMB</kbd> and drag the mouse to select objects within an area
 	- Once <kbd>LMB</kbd> is released, the objects will be selected
 	- The tool is otherwise identical to the Rectangle Select Tool
+	- Switch the tool to "Fill" mode in the menu on the right to fill the area you draw around instead of selecting it. The fill uses the "Fill Color" shown in that menu, which is the same as the main/top color on the left toolbar
+	- In "Fill" mode, the shape you draw is filled when you release <kbd>LMB</kbd>. Loops that cross over themselves are filled completely
 - Edit/Cursor Tool
 	- You can click on any object except a brush stroke to select it when this tool is selected
     - Double click on any object to start editing it. The object's relavant properties will be displayed on the right

@@ -1,6 +1,8 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include "CustomEvents.hpp"
+#include <optional>
+#include <vector>
 
 namespace FingerInput {
 
@@ -60,13 +62,18 @@ struct TouchCallbackArgs {
         SDL_FingerID fingerID;
         Vector2f pos;
         Vector2f motion;
+        bool canceled = false; // Only set on UP. The OS took this touch away (e.g. palm rejection), so anything it started should be undone rather than completed
     } action;
     std::shared_ptr<BaseGesture> gesture;
 };
 
 class InputTracker {
     public:
-        TouchCallbackArgs update_finger_data_input_callback(SDL_EventType eventType, SDL_TouchID touchDeviceID, SDL_FingerID fingerID, const Vector2f& pos, const Vector2f& delta);
+        // Returns nullopt for events belonging to a finger that isn't being tracked
+        std::optional<TouchCallbackArgs> update_finger_data_input_callback(SDL_EventType eventType, SDL_TouchID touchDeviceID, SDL_FingerID fingerID, const Vector2f& pos, const Vector2f& delta);
+        // Cancels every finger currently down, returning a canceled UP event for each one
+        std::vector<TouchCallbackArgs> cancel_all_fingers();
+        bool is_finger_down(SDL_FingerID fingerID) const;
         void update();
     private:
         struct {
