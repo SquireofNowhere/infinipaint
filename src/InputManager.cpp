@@ -562,6 +562,9 @@ void InputManager::backend_pen_touch_down_update(const SDL_PenTouchEvent& e) {
     Vector2f mouseNewPos = backend_cursor_pos_calculation({e.x, e.y});
     mouse.set_pos(mouseNewPos);
 
+    if(main.conf.tabletOptions.disableTouchWhenPenInProximity)
+        cancel_all_finger_touches();
+
     pen.previousPos = mouseNewPos;
     pen.isDown = true;
     mouse.leftDown = true;
@@ -588,25 +591,28 @@ void InputManager::backend_pen_touch_down_update(const SDL_PenTouchEvent& e) {
 }
 
 void InputManager::backend_pen_touch_up_update(const SDL_PenTouchEvent& e) {
-    Vector2f mouseNewPos = backend_cursor_pos_calculation({e.x, e.y});
+    pen_touch_up(backend_cursor_pos_calculation({e.x, e.y}), e.eraser);
+}
+
+void InputManager::pen_touch_up(const Vector2f& mouseNewPos, bool eraser) {
     mouse.set_pos(mouseNewPos);
 
     pen.previousPos = mouseNewPos;
     pen.isDown = false;
     mouse.leftDown = false;
-    pen.isEraser = e.eraser;
+    pen.isEraser = eraser;
     pen.pressure = 0.0;
 
     main.input_mouse_button_callback({
         .deviceType = MouseDeviceType::PEN,
         .button = MouseButton::LEFT,
-        .down = e.down,
+        .down = false,
         .clicks = 0,
         .pos = mouseNewPos
     });
     main.input_pen_touch_callback({
-        .down = e.down,
-        .eraser = e.eraser,
+        .down = false,
+        .eraser = eraser,
         .pos = mouseNewPos
     });
 
@@ -653,8 +659,36 @@ void InputManager::backend_pen_axis_update(const SDL_PenAxisEvent& e) {
 }
 
 void InputManager::backend_touch_finger_update(const SDL_TouchFingerEvent& e) {
+    // While the pen is near the screen, ignore new touches if requested (palm rejection). Touches that are already down must still be allowed to lift
+    if(e.type == SDL_EVENT_FINGER_DOWN && main.conf.tabletOptions.disableTouchWhenPenInProximity && (pen.inProximity || pen.isDown))
+        return;
+
     auto callbackArgs = fingerTracker.update_finger_data_input_callback(e.type, e.touchID, e.fingerID, backend_touch_cursor_pos_calculation({e.x, e.y}), backend_touch_cursor_delta_calculation({e.dx, e.dy}));
-    main.input_finger_touch_callback(callbackArgs);
+    if(callbackArgs) {
+        if(callbackArgs->action.type == FingerInput::ActionType::DOWN)
+            isTouchDevice = true;
+        main.input_finger_touch_callback(*callbackArgs);
+    }
+}
+
+void InputManager::cancel_all_finger_touches() {
+    for(const FingerInput::TouchCallbackArgs& cancelArgs : fingerTracker.cancel_all_fingers())
+        main.input_finger_touch_callback(cancelArgs);
+}
+
+void InputManager::backend_pen_proximity_in_update(const SDL_PenProximityEvent& e) {
+    pen.inProximity = true;
+    // Palm rejection: a palm resting on the screen before the pen arrives shouldn't keep drawing
+    if(main.conf.tabletOptions.disableTouchWhenPenInProximity)
+        cancel_all_finger_touches();
+}
+
+void InputManager::backend_pen_proximity_out_update(const SDL_PenProximityEvent& e) {
+    pen.inProximity = false;
+    // The OS can take the pen away while it's touching the screen (e.g. Android's ACTION_CANCEL), in which case no pen up event is sent.
+    // Release it here, otherwise the canvas thinks the pen is still held down and ignores touch input
+    if(pen.isDown)
+        pen_touch_up(pen.previousPos, pen.isEraser);
 }
 
 void InputManager::update_safe_area() {

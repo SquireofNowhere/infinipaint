@@ -272,9 +272,13 @@ struct InputManager {
     void backend_pen_button_up_update(const SDL_PenButtonEvent& e);
     void backend_pen_touch_down_update(const SDL_PenTouchEvent& e);
     void backend_pen_touch_up_update(const SDL_PenTouchEvent& e);
+    void pen_touch_up(const Vector2f& mouseNewPos, bool eraser);
     void backend_pen_motion_update(const SDL_PenMotionEvent& e);
     void backend_pen_axis_update(const SDL_PenAxisEvent& e);
     void backend_touch_finger_update(const SDL_TouchFingerEvent& e);
+    void backend_pen_proximity_in_update(const SDL_PenProximityEvent& e);
+    void backend_pen_proximity_out_update(const SDL_PenProximityEvent& e);
+    void cancel_all_finger_touches();
     void backend_window_resize_update();
     void backend_window_scale_update(const SDL_WindowEvent& e);
 

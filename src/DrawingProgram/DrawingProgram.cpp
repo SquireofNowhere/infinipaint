@@ -321,7 +321,12 @@ void DrawingProgram::input_finger_touch_callback(const FingerInput::TouchCallbac
             }
             break;
         case PointerDownState::FINGER:
-            if(touch.fingers.size() > 1) {
+            if(touch.action.canceled) {
+                // The OS took this touch away (e.g. palm rejection), so undo what it was doing instead of completing it
+                drawTool->cancel_finger_touch_callback(touch);
+                pointerDown = touch.fingers.size() == 1 ? PointerDownState::NONE : PointerDownState::FINGER_DISABLED;
+            }
+            else if(touch.fingers.size() > 1) {
                 drawTool->cancel_finger_touch_callback(touch);
                 pointerDown = PointerDownState::FINGER_DISABLED;
             }

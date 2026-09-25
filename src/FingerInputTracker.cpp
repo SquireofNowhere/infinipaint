@@ -43,9 +43,11 @@ void TouchCallbackArgs::scale(float multiplier) {
         gesture->scale(multiplier);
 }
 
-TouchCallbackArgs InputTracker::update_finger_data_input_callback(SDL_EventType eventType, SDL_TouchID touchDeviceID, SDL_FingerID fingerID, const Vector2f& pos, const Vector2f& delta) {
+std::optional<TouchCallbackArgs> InputTracker::update_finger_data_input_callback(SDL_EventType eventType, SDL_TouchID touchDeviceID, SDL_FingerID fingerID, const Vector2f& pos, const Vector2f& delta) {
     switch(eventType) {
         case SDL_EVENT_FINGER_DOWN: {
+            // A finger ID that's still marked as down must have lost its UP event, so drop the stale entry
+            std::erase_if(fingers, [&](const FingerData& f) { return fingerID == f.fingerID; });
             auto touchTime = std::chrono::steady_clock::now();
             bool isFirstFingerDown = fingers.empty();
             if(tap.fingersGoingUp)
@@ -63,16 +65,23 @@ TouchCallbackArgs InputTracker::update_finger_data_input_callback(SDL_EventType 
         }
         case SDL_EVENT_FINGER_MOTION: {
             auto f = std::find_if(fingers.begin(), fingers.end(), [&](const FingerData& f) { return fingerID == f.fingerID; });
-            if(f != fingers.end()) {
-                f->pos = pos;
-                if(vec_distance_sqrd(f->pos, f->initialTouchPos) > MAX_DELTA_MOTION_TO_DISABLE_TAP_SQRD) {
-                    f->fingerMovedAlot = true;
-                    invalidate_tap();
-                }
+            if(f == fingers.end())
+                return std::nullopt;
+            f->pos = pos;
+            if(vec_distance_sqrd(f->pos, f->initialTouchPos) > MAX_DELTA_MOTION_TO_DISABLE_TAP_SQRD) {
+                f->fingerMovedAlot = true;
+                invalidate_tap();
             }
             break;
         }
-        default: break;
+        case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_FINGER_CANCELED: {
+            if(!is_finger_down(fingerID))
+                return std::nullopt;
+            break;
+        }
+        default:
+            return std::nullopt;
     }
     TouchCallbackArgs toRet;
     toRet.fingers = fingers;
@@ -83,6 +92,11 @@ TouchCallbackArgs InputTracker::update_finger_data_input_callback(SDL_EventType 
         .motion = delta
     };
     switch(eventType) {
+        case SDL_EVENT_FINGER_CANCELED:
+            // A canceled touch was never meant to happen, so it can't be part of a tap
+            invalidate_tap();
+            toRet.action.canceled = true;
+            [[fallthrough]];
         case SDL_EVENT_FINGER_UP: {
             toRet.action.type = ActionType::UP;
             if(!tap.fingersGoingUp) {
@@ -121,6 +135,22 @@ TouchCallbackArgs InputTracker::update_finger_data_input_callback(SDL_EventType 
         default: break;
     }
     return toRet;
+}
+
+std::vector<TouchCallbackArgs> InputTracker::cancel_all_fingers() {
+    std::vector<TouchCallbackArgs> toRet;
+    // Cancel the most recent finger first, so that the first finger down is the last one to go up
+    while(!fingers.empty()) {
+        FingerData f = fingers.back();
+        auto cancelArgs = update_finger_data_input_callback(SDL_EVENT_FINGER_CANCELED, 0, f.fingerID, f.pos, Vector2f{0.0f, 0.0f});
+        if(cancelArgs)
+            toRet.emplace_back(*cancelArgs);
+    }
+    return toRet;
+}
+
+bool InputTracker::is_finger_down(SDL_FingerID fingerID) const {
+    return std::find_if(fingers.begin(), fingers.end(), [&](const FingerData& f) { return fingerID == f.fingerID; }) != fingers.end();
 }
 
 void InputTracker::update() {
