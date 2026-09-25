@@ -1,8 +1,14 @@
 name: Android APK
 
+# Builds only when asked to:
+# - Push a version tag (e.g. v0.6.1-fork.1) to publish a release with the APK
+# - Run it manually from the Actions tab (once this workflow is on the default branch)
+# - Changes to this workflow file are built on push, to test them
 on:
   push:
-    branches: [main, save-folder-sync]
+    tags: ["v*"]
+    paths: [".github/workflows/android.yml"]
+    branches: ["**"]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +23,10 @@ env:
   CMAKE_VERSION: 3.31.6
   CONAN_ARCH: armv8
   ANDROID_ABI: arm64-v8a
+  # Compiled conan dependencies are stored as assets on this release, since the actions cache
+  # is scoped per branch and evicted after 7 days unused
+  CONAN_CACHE_RELEASE: conan-cache
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build:
@@ -53,14 +63,26 @@ jobs:
           pip install "conan>=2,<3"
           conan profile detect --force
 
-      - name: Restore conan cache
-        id: conan-cache
+      - name: Compute conan cache key
+        run: echo "CONAN_CACHE_FILE=conan-android-${CONAN_ARCH}-${NDK_VERSION}-${{ hashFiles('conanfile.py', 'conan/**') }}.tgz" >> "$GITHUB_ENV"
+
+      - name: Restore conan cache from release
+        id: release-cache
+        run: |
+          if gh release download "$CONAN_CACHE_RELEASE" --pattern "$CONAN_CACHE_FILE" --dir "$RUNNER_TEMP" 2>/dev/null; then
+            conan cache restore "$RUNNER_TEMP/$CONAN_CACHE_FILE"
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No cached dependencies found for $CONAN_CACHE_FILE"
+          fi
+
+      # Fallback for dependencies built before the release cache existed
+      - name: Restore conan cache from actions cache
+        if: steps.release-cache.outputs.hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: ~/.conan2/p
           key: conan-android-${{ env.CONAN_ARCH }}-${{ env.NDK_VERSION }}-${{ hashFiles('conanfile.py', 'conan/**') }}
-          restore-keys: |
-            conan-android-${{ env.CONAN_ARCH }}-${{ env.NDK_VERSION }}-
 
       - name: Build conan dependencies
         run: |
@@ -71,14 +93,19 @@ jobs:
             -c:h tools.android:ndk_path="${ANDROID_NDK_PATH}" \
             -c tools.cmake.cmake_layout:build_folder_vars="['settings.arch']" \
             --build=missing
-          conan cache clean "*" --source --build --download --temp
 
-      - name: Save conan cache
-        if: steps.conan-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.conan2/p
-          key: conan-android-${{ env.CONAN_ARCH }}-${{ env.NDK_VERSION }}-${{ hashFiles('conanfile.py', 'conan/**') }}
+      - name: Save conan cache to release
+        if: steps.release-cache.outputs.hit != 'true'
+        run: |
+          conan cache clean "*" --source --build --download --temp
+          conan cache save "*:*" --file "$RUNNER_TEMP/$CONAN_CACHE_FILE"
+          ls -lh "$RUNNER_TEMP/$CONAN_CACHE_FILE"
+          if ! gh release view "$CONAN_CACHE_RELEASE" > /dev/null 2>&1; then
+            gh release create "$CONAN_CACHE_RELEASE" --prerelease --target "$GITHUB_SHA" \
+              --title "Build cache (not an app release)" \
+              --notes "Compiled dependencies used by the Android build workflow. Not meant to be downloaded."
+          fi
+          gh release upload "$CONAN_CACHE_RELEASE" "$RUNNER_TEMP/$CONAN_CACHE_FILE" --clobber
 
       - name: Decode signing key
         env:
@@ -112,14 +139,20 @@ jobs:
           name: ${{ env.APK }}
           path: ${{ env.APK }}
 
-      - name: Publish to release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish tag release
+        if: github.ref_type == 'tag'
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$APK" --verify-tag \
+            --title "InfiniPaint Fork $GITHUB_REF_NAME" \
+            --notes "arm64 APK. Installs alongside the official InfiniPaint as \"InfiniPaint Fork\"."
+
+      - name: Publish branch prerelease
+        if: github.ref_type == 'branch'
         run: |
           TAG="android-${GITHUB_REF_NAME//\//-}"
           gh release delete "$TAG" --yes --cleanup-tag || true
           gh release create "$TAG" "$APK" \
             --prerelease \
             --target "$GITHUB_SHA" \
-            --title "Android build: ${GITHUB_REF_NAME} (${GITHUB_SHA::7})" \
-            --notes "Latest arm64 APK built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Installs alongside the official InfiniPaint as \"InfiniPaint Fork\"."
+            --title "Android test build: ${GITHUB_REF_NAME} (${GITHUB_SHA::7})" \
+            --notes "Test APK built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Installs alongside the official InfiniPaint as \"InfiniPaint Fork\"."
