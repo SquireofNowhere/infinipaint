@@ -48,6 +48,14 @@ void PanCanvasTool::input_mouse_button_on_canvas_callback(const InputManager::Mo
                 w.drawData.cam.clear_control_mode();
         });
     }
+    // Touch input only reaches the camera through this tool, so the camera wouldn't otherwise see the finger lift, and would stay stuck in pan mode
+    if(button.deviceType == InputManager::MouseDeviceType::TOUCH)
+        drawP.world.drawData.cam.input_mouse_button_callback(drawP.world, button);
+}
+
+void PanCanvasTool::input_mouse_motion_callback(const InputManager::MouseMotionCallbackArgs& motion) {
+    if(motion.deviceType == InputManager::MouseDeviceType::TOUCH)
+        drawP.world.drawData.cam.input_mouse_motion_callback(drawP.world, motion);
 }
 
 void PanCanvasTool::gui_phone_toolbox(PhoneDrawingProgramScreen& t) {

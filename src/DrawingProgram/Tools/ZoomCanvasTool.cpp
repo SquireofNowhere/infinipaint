@@ -55,6 +55,14 @@ void ZoomCanvasTool::input_mouse_button_on_canvas_callback(const InputManager::M
                 w.drawData.cam.clear_control_mode();
         });
     }
+    // Touch input only reaches the camera through this tool, so the camera wouldn't otherwise see the finger lift, and would stay stuck in zoom mode
+    if(button.deviceType == InputManager::MouseDeviceType::TOUCH)
+        drawP.world.drawData.cam.input_mouse_button_callback(drawP.world, button);
+}
+
+void ZoomCanvasTool::input_mouse_motion_callback(const InputManager::MouseMotionCallbackArgs& motion) {
+    if(motion.deviceType == InputManager::MouseDeviceType::TOUCH)
+        drawP.world.drawData.cam.input_mouse_motion_callback(drawP.world, motion);
 }
 
 void ZoomCanvasTool::right_click_popup_gui(Toolbar& t, Vector2f popupPos) {
