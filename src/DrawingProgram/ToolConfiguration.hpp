@@ -55,6 +55,13 @@ class ToolConfiguration {
             NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(EyeDropperToolConfig, selectingStrokeColor)
         } eyeDropper;
 
+        struct FillToolConfig {
+            float tolerance = 10.0f;
+            int gapClose = 0;
+            int expand = 1;
+            NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(FillToolConfig, tolerance, gapClose, expand)
+        } fill;
+
         struct LineDrawToolConfig {
             bool hasRoundCaps = true;
             float relativeWidth = 15.0f;
@@ -89,5 +96,5 @@ class ToolConfiguration {
         void print_relative_width_fail_message(RelativeWidthFailCode failCode);
         void relative_width_gui(DrawingProgram& drawP, const char* label);
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(ToolConfiguration, brush, eraser, ellipseDraw, rectDraw, eyeDropper, lineDraw, screenshot, globalConf)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(ToolConfiguration, brush, eraser, ellipseDraw, rectDraw, eyeDropper, fill, lineDraw, screenshot, globalConf)
 };

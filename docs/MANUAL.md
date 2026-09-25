@@ -40,6 +40,12 @@
 	- Hold <kbd>LMB</kbd> and drag the mouse to place a rectangle
 	- Hold <kbd>Shift</kbd> while creating the rectangle to create a square
 	- You can change the properties of the rectangle between "Fill Only", "Outline Only", and "Fill and Outline". Outlines will use the main/top color on the left toolbar, which is the same as the one used for the brush tool. Fills will use the secondary/bottom color on the left toolbar
+- Fill Tool
+	- Click inside an enclosed area on the canvas to fill it with the main/top color on the left toolbar
+	- The area is found from what's currently visible on screen, so the whole area must be visible and closed off. If it reaches the edge of the screen, zoom out or close the shape first
+	- "Tolerance" controls how different a color can be from the clicked color and still be filled
+	- "Close Gaps" lets the fill stop at outlines that have small gaps in them. Higher values close bigger gaps
+	- "Expand" grows the fill by a few pixels so it tucks under the edges of the outline it stops at
 - Rectangle Select Tool
 	- Hold <kbd>LMB</kbd> and drag the mouse to select objects within a rectangle.
 	- Once <kbd>LMB</kbd> is released, the objects will be selected

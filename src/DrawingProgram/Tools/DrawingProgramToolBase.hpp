@@ -41,7 +41,8 @@ enum class DrawingProgramToolType : int {
     EDIT,
     ZOOM,
     PAN,
-    LINE
+    LINE,
+    FILL
 };
 
 class DrawingProgramToolBase {

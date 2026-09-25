@@ -255,6 +255,11 @@ void DrawingProgram::input_key_callback(const InputManager::KeyCallbackArgs& key
                 switch_to_tool(DrawingProgramToolType::LINE);
             break;
         }
+        case InputManager::KEY_DRAW_TOOL_FILL: {
+            if(key.down && !key.repeat)
+                switch_to_tool(DrawingProgramToolType::FILL);
+            break;
+        }
         case InputManager::KEY_HOLD_TO_PAN: {
             if(key.down && !key.repeat && tempMoveToolSwitch == TemporaryMoveToolSwitch::NONE) {
                 toolTypeAfterTempMove = drawTool->get_type();
@@ -453,6 +458,7 @@ void DrawingProgram::toolbar_gui(Toolbar& t) {
                 tool_button("Text Toolbar Button", "data/icons/text.svg", DrawingProgramToolType::TEXTBOX);
                 tool_button("Ellipse Toolbar Button", "data/icons/circle.svg", DrawingProgramToolType::ELLIPSE);
                 tool_button("Rect Toolbar Button", "data/icons/rectangle.svg", DrawingProgramToolType::RECTANGLE);
+                tool_button("Fill Toolbar Button", "data/icons/RemixIcon/paint-line.svg", DrawingProgramToolType::FILL);
                 tool_button("RectSelect Toolbar Button", "data/icons/rectselect.svg", DrawingProgramToolType::RECTSELECT);
                 tool_button("LassoSelect Toolbar Button", "data/icons/lassoselect.svg", DrawingProgramToolType::LASSOSELECT);
                 tool_button("Edit Toolbar Button", "data/icons/cursor.svg", DrawingProgramToolType::EDIT);
