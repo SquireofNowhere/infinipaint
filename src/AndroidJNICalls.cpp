@@ -80,10 +80,48 @@ namespace AndroidJNICalls {
         return strToRet;
     }
 
-    void shareInternalFiles(const std::vector<std::string>& filePaths, const std::string& mimeType) {
+    bool hasAllFilesAccess() {
+        JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+        bool toRet = false;
+        jni_local_frame(env, 16, [&] {
+            jobject activity = (jobject) SDL_GetAndroidActivity();
+            jclass clazz = env->GetObjectClass(activity);
+            jmethodID method_id = env->GetStaticMethodID(clazz, "hasAllFilesAccess", "()Z");
+            toRet = env->CallStaticBooleanMethod(clazz, method_id);
+        });
+        return toRet;
+    }
+
+    void requestAllFilesAccess() {
+        Logger::get().log(Logger::LogType::INFO, "[AndroidJNICalls::requestAllFilesAccess] Request all files access");
+        JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+        jni_local_frame(env, 16, [&] {
+            jobject activity = (jobject) SDL_GetAndroidActivity();
+            jclass clazz = env->GetObjectClass(activity);
+            jmethodID method_id = env->GetStaticMethodID(clazz, "requestAllFilesAccess", "()V");
+            env->CallStaticVoidMethod(clazz, method_id);
+        });
+    }
+
+    std::string getPublicDocumentsPath() {
+        JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+        std::string strToRet = "";
+        jni_local_frame(env, 16, [&] {
+            jobject activity = (jobject) SDL_GetAndroidActivity();
+            jclass clazz = env->GetObjectClass(activity);
+            jmethodID method_id = env->GetStaticMethodID(clazz, "getPublicDocumentsPath", "()Ljava/lang/String;");
+            jobject obj = env->CallStaticObjectMethod(clazz, method_id);
+            if(obj == nullptr)
+                return;
+            strToRet = jstring2string(env, static_cast<jstring>(obj));
+        });
+        return strToRet;
+    }
+
+    void shareFiles(const std::vector<std::string>& filePaths, const std::string& mimeType) {
         if(filePaths.empty())
             return;
-        Logger::get().log(Logger::LogType::INFO, "[AndroidJNICalls::shareInternalFile] Share internal files");
+        Logger::get().log(Logger::LogType::INFO, "[AndroidJNICalls::shareFiles] Share files");
         JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
         jni_local_frame(env, 16, [&] {
             jobject activity = (jobject) SDL_GetAndroidActivity();
@@ -97,7 +135,7 @@ namespace AndroidJNICalls {
                 env->DeleteLocalRef(s);
             }
 
-            jmethodID method_id = env->GetStaticMethodID(clazz, "shareInternalFiles",
+            jmethodID method_id = env->GetStaticMethodID(clazz, "shareFiles",
                                                          "([Ljava/lang/String;Ljava/lang/String;)V");
             env->CallStaticVoidMethod(clazz, method_id, jFilePathArray,
                                       string2jstring(env, mimeType));

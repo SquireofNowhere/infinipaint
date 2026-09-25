@@ -46,14 +46,12 @@ using namespace GUIStuff;
 using namespace ElementHelpers;
 
 #define MAIN_SAVES_FOLDER_STR "saves"
+#define TRASH_FOLDER_STR "trash"
+// Folder inside the shared Documents directory. Only the "saves" folder inside it is meant to be synced
+#define SHARED_STORAGE_FOLDER_STR "InfiniPaint"
 
 FileSelectScreen::FileSelectScreen(MainProgram& m): Screen(m) {
-    savePath = main.conf.configPath / MAIN_SAVES_FOLDER_STR;
-    trashPath = main.conf.configPath / "trash";
     infoPath = main.conf.configPath / "fileSelectInfo.json";
-
-    SDL_CreateDirectory(savePath.string().c_str());
-    SDL_CreateDirectory(trashPath.string().c_str());
 
     try {
         nlohmann::json j(nlohmann::json::parse(read_file_to_string(infoPath)));
@@ -61,11 +59,127 @@ FileSelectScreen::FileSelectScreen(MainProgram& m): Screen(m) {
     }
     catch(...) {}
 
+    init_save_paths();
+
     update_file_list(fileList, savePath, false);
 
     // Update trash list once to get trash info up to date
     std::vector<FileInfo> trashListTemp;
     update_file_list(trashListTemp, trashPath, true);
+}
+
+void FileSelectScreen::init_save_paths() {
+    std::filesystem::path internalSavePath = main.conf.configPath / MAIN_SAVES_FOLDER_STR;
+    std::filesystem::path internalTrashPath = main.conf.configPath / TRASH_FOLDER_STR;
+
+    savePath = internalSavePath;
+    trashPath = internalTrashPath;
+    savesInSharedStorage = false;
+
+#ifdef __ANDROID__
+    if(AndroidJNICalls::hasAllFilesAccess()) {
+        std::string documentsPath = AndroidJNICalls::getPublicDocumentsPath();
+        if(!documentsPath.empty()) {
+            std::filesystem::path sharedRoot = std::filesystem::path(documentsPath) / SHARED_STORAGE_FOLDER_STR;
+            std::filesystem::path sharedSavePath = sharedRoot / MAIN_SAVES_FOLDER_STR;
+            std::filesystem::path sharedTrashPath = sharedRoot / TRASH_FOLDER_STR;
+            if(SDL_CreateDirectory(sharedSavePath.string().c_str()) && SDL_CreateDirectory(sharedTrashPath.string().c_str())) {
+                savePath = sharedSavePath;
+                trashPath = sharedTrashPath;
+                savesInSharedStorage = true;
+                migrate_saves_folder(internalSavePath, savePath, false);
+                migrate_saves_folder(internalTrashPath, trashPath, true);
+            }
+            else
+                Logger::get().log(Logger::LogType::INFO, "[FileSelectScreen::init_save_paths] Could not create shared storage folders: " + std::string(SDL_GetError()));
+        }
+    }
+#endif
+
+    Logger::get().log(Logger::LogType::INFO, "Saves Path: " + savePath.string());
+
+    SDL_CreateDirectory(savePath.string().c_str());
+    SDL_CreateDirectory(trashPath.string().c_str());
+}
+
+void FileSelectScreen::migrate_saves_folder(const std::filesystem::path& fromPath, const std::filesystem::path& toPath, bool isTrash) {
+    std::vector<std::string> fromNames;
+    try {
+        fromNames = glob_path_as_string_list(fromPath, ("*" + World::DOT_FILE_EXTENSION).c_str(), 0, [&](const auto& p){ return p.stem().string();});
+    } catch(...) {
+        return; // Old folder doesn't exist, nothing to migrate
+    }
+
+    std::vector<std::string> toFolderListNames;
+    try {
+        toFolderListNames = glob_path_as_string_list(toPath, "*", 0, [&](const auto& p){ return p.stem().string();});
+    } catch(...) {}
+
+    // The old and new folders are on different filesystems, so files are copied then removed instead of renamed
+    auto move_file = [](const std::filesystem::path& from, const std::filesystem::path& to) {
+        if(SDL_RenamePath(from.string().c_str(), to.string().c_str()))
+            return true;
+        SDL_PathInfo fromInfo, toInfo;
+        if(!SDL_GetPathInfo(from.string().c_str(), &fromInfo))
+            return false;
+        if(!SDL_CopyFile(from.string().c_str(), to.string().c_str()) || !SDL_GetPathInfo(to.string().c_str(), &toInfo) || toInfo.size != fromInfo.size) {
+            SDL_RemovePath(to.string().c_str());
+            return false;
+        }
+        SDL_RemovePath(from.string().c_str());
+        return true;
+    };
+
+    size_t migratedCount = 0;
+    size_t failedCount = 0;
+    for(const std::string& fileName : fromNames) {
+        std::string newFileName = ensure_string_unique(toFolderListNames, fileName);
+        std::filesystem::path filePath = fromPath / (fileName + World::DOT_FILE_EXTENSION);
+        std::filesystem::path newFilePath = toPath / (newFileName + World::DOT_FILE_EXTENSION);
+        if(!move_file(filePath, newFilePath)) {
+            Logger::get().log(Logger::LogType::INFO, "[FileSelectScreen::migrate_saves_folder] Failed to move " + filePath.string() + " to " + newFilePath.string() + ": " + std::string(SDL_GetError()));
+            failedCount++;
+            continue;
+        }
+        toFolderListNames.emplace_back(newFileName);
+        move_file(fromPath / (fileName + ".jpg"), toPath / (newFileName + ".jpg"));
+
+        if(isTrash && newFileName != fileName) {
+            auto it = saveInfo.trash.files.find(fileName);
+            if(it != saveInfo.trash.files.end()) {
+                TrashInfo::TrashFile trashFile = it->second;
+                saveInfo.trash.files.erase(it);
+                saveInfo.trash.files[newFileName] = trashFile;
+            }
+        }
+        migratedCount++;
+    }
+
+    if(failedCount == 0) {
+        // Leftover thumbnails without a canvas
+        try {
+            for(const std::string& jpgName : glob_path_as_string_list(fromPath, "*.jpg", 0, [&](const auto& p){ return p.filename().string();}))
+                SDL_RemovePath((fromPath / jpgName).string().c_str());
+        } catch(...) {}
+        SDL_RemovePath(fromPath.string().c_str()); // Only succeeds if the folder is empty
+    }
+
+    if(migratedCount != 0) {
+        Logger::get().log(Logger::LogType::INFO, "[FileSelectScreen::migrate_saves_folder] Moved " + std::to_string(migratedCount) + " canvases from " + fromPath.string() + " to " + toPath.string());
+        if(!isTrash)
+            Logger::get().log(Logger::LogType::USERINFO, "Moved " + std::to_string(migratedCount) + " canvases to " + toPath.string());
+        save_files();
+    }
+    if(failedCount != 0)
+        Logger::get().log(Logger::LogType::WORLDFATAL, "Failed to move " + std::to_string(failedCount) + " canvases from " + fromPath.string());
+}
+
+void FileSelectScreen::input_app_about_to_go_to_foreground_callback() {
+    // Pick up newly granted storage access, and files that were synced in while in the background
+    if(!savesInSharedStorage)
+        init_save_paths();
+    update_file_list(fileList, (selectedMenu == SelectedMenu::TRASH) ? trashPath : savePath, selectedMenu == SelectedMenu::TRASH);
+    main.g.gui.set_to_layout();
 }
 
 void FileSelectScreen::update() {
@@ -288,6 +402,7 @@ void FileSelectScreen::main_display() {
                 }) {
                     switch(selectedMenu) {
                         case SelectedMenu::FILES:
+                            storage_access_prompt();
                             file_view();
                             if(!editMode)
                                 create_file_button();
@@ -331,6 +446,34 @@ void FileSelectScreen::main_display() {
             menu_black_box();
         }
     }
+}
+
+void FileSelectScreen::storage_access_prompt() {
+#ifdef __ANDROID__
+    if(savesInSharedStorage)
+        return;
+    auto& gui = main.g.gui;
+    CLAY_AUTO_ID({
+        .layout = {
+            .sizing = {.width = CLAY_SIZING_GROW(0, 400), .height = CLAY_SIZING_FIT(0)},
+            .padding = CLAY_PADDING_ALL(gui.io.theme->padding1),
+            .childGap = gui.io.theme->childGap1,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM
+        },
+        .backgroundColor = convert_vec4<Clay_Color>(gui.io.theme->backColor1),
+        .cornerRadius = CLAY_CORNER_RADIUS(gui.io.theme->windowCorners1)
+    }) {
+        text_label(gui, "Canvases are stored privately");
+        text_label_light(gui, "Allow file access to keep them in");
+        text_label_light(gui, "Documents/InfiniPaint/saves for syncing");
+        text_button(gui, "allow file access button", "Allow file access", {
+            .wide = true,
+            .onClick = [&] {
+                AndroidJNICalls::requestAllFilesAccess();
+            }
+        });
+    }
+#endif
 }
 
 void FileSelectScreen::create_file_button() {
@@ -435,10 +578,10 @@ void FileSelectScreen::share_selected_files() {
     std::vector<std::string> filesToSend;
     for(const FileInfo& f : fileList) {
         if(f.selected)
-            filesToSend.emplace_back(std::string(MAIN_SAVES_FOLDER_STR) + std::string("/") + f.fileName + ".infpnt");
+            filesToSend.emplace_back((savePath / (f.fileName + World::DOT_FILE_EXTENSION)).string());
     }
     if(!filesToSend.empty())
-        AndroidJNICalls::shareInternalFiles(filesToSend, "application/octet-stream");
+        AndroidJNICalls::shareFiles(filesToSend, "application/octet-stream");
 #endif
 }
 
@@ -1145,6 +1288,18 @@ void FileSelectScreen::settings_view() {
                         .layoutDirection = CLAY_TOP_TO_BOTTOM
                     },
                 }) {
+                    text_label(gui, "Canvas folder:");
+                    text_label_light(gui, savePath.string());
+                    #ifdef __ANDROID__
+                        if(!savesInSharedStorage) {
+                            text_button(gui, "settings allow file access button", "Allow file access for syncing", {
+                                .wide = true,
+                                .onClick = [&] {
+                                    AndroidJNICalls::requestAllFilesAccess();
+                                }
+                            });
+                        }
+                    #endif
                     input_text_field(gui, "display name input", "Display name", &main.conf.displayName);
                     color_picker_button_field(gui, "defaultCanvasBackgroundColor", "Default canvas background color", &main.conf.defaultCanvasBackgroundColor, { .hasAlpha = false });
                     input_scalar_field(gui, "Max GUI Scale", "Max GUI Scale", &main.conf.guiScale, 1.0f, 2.0f, {
@@ -1258,7 +1413,8 @@ void FileSelectScreen::input_open_infinipaint_file_callback(const CustomEvents::
     main.create_new_tab(openFile);
     if(main.world)
         main.set_screen([&] (std::unique_ptr<Screen>) { return std::make_unique<PhoneDrawingProgramScreen>(main); });
-    else if(!openFile.isClient && openFile.filePathSource.has_value()) // Invalid file, remove it
+    // Invalid file, remove it. Not done in shared storage, since the file may be partially synced, and removing it would remove it on every synced device
+    else if(!openFile.isClient && openFile.filePathSource.has_value() && !savesInSharedStorage)
         SDL_RemovePath(openFile.filePathSource.value().string().c_str());
 }
 

@@ -27,7 +27,11 @@ namespace AndroidJNICalls {
     extern InputManager* globalInputManager;
 
     std::string getFileNameFromURI(const std::string& uri);
-    void shareInternalFiles(const std::vector<std::string>& filePaths, const std::string& mimeType);
+    bool hasAllFilesAccess();
+    void requestAllFilesAccess();
+    std::string getPublicDocumentsPath();
+    // filePaths are absolute
+    void shareFiles(const std::vector<std::string>& filePaths, const std::string& mimeType);
     void shareText(const std::string& str);
     void startTextInput(CustomEvents::InputTextBoxID newTextboxID, const std::shared_ptr<RichText::TextBox>& newTextbox, const std::shared_ptr<RichText::TextBox::Cursor>& newCursor, const std::shared_ptr<RichText::TextStyleModifier::ModifierMap>& modMap, int inputType);
     void startNetworkService();

@@ -20,14 +20,18 @@ package com.erroratline0.infinipaint;
 
 import static androidx.core.content.FileProvider.getUriForFile;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -157,13 +161,38 @@ public class InfiniPaint extends SDLActivity {
         mSingleton.stopService(new Intent(mSingleton, InfiniPaintNetworkService.class));
     }
 
-    static public void shareInternalFiles(String[] filePaths, String mimeType) {
+    static public boolean hasAllFilesAccess() {
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            return Environment.isExternalStorageManager();
+        return getContext().checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    static public void requestAllFilesAccess() {
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                getContext().startActivity(intent);
+            } catch (Exception e) {
+                getContext().startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+            }
+        }
+        else
+            mSingleton.requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
+    }
+
+    static public String getPublicDocumentsPath() {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath();
+    }
+
+    // filePaths are absolute paths, and must be covered by res/xml/file_paths.xml
+    static public void shareFiles(String[] filePaths, String mimeType) {
         if(filePaths.length == 1) {
-            File newFile = new File(getContext().getFilesDir(), filePaths[0]);
+            File newFile = new File(filePaths[0]);
             Uri contentUri;
 
             try {
-                contentUri = getUriForFile(getContext(), "com.erroratline0.infinipaint.fileprovider", newFile);
+                contentUri = getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", newFile);
             } catch (Exception e) {
                 Log.v("INFO", "[shareInternalFile] Exception " + e);
                 return;
@@ -179,9 +208,9 @@ public class InfiniPaint extends SDLActivity {
         else if(filePaths.length > 1) {
             ArrayList<Uri> arrayList = new ArrayList<Uri>();
             for(String str : filePaths) {
-                File newFile = new File(getContext().getFilesDir(), str);
+                File newFile = new File(str);
                 try {
-                    arrayList.add(getUriForFile(getContext(), "com.erroratline0.infinipaint.fileprovider", newFile));
+                    arrayList.add(getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", newFile));
                 } catch (Exception e) {
                     Log.v("INFO", "[shareInternalFile] Exception " + e);
                     return;

@@ -377,6 +377,7 @@ void MainProgram::input_app_about_to_go_to_background_callback() {
 }
 
 void MainProgram::input_app_about_to_go_to_foreground_callback() {
+    screen->input_app_about_to_go_to_foreground_callback();
     NetThreadManager::get().go_to_foreground();
 }
 
